@@ -277,6 +277,25 @@ export default class AssistantManagerServer {
             required: ['topic_id', 'content', 'role'],
             additionalProperties: false
           }
+        },
+        {
+          name: 'create_new_conversation',
+          description: 'Create a new conversation topic with the default assistant (equivalent to clicking "New Topic" in the UI)',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              name: {
+                type: 'string',
+                description: 'Custom name for the conversation (optional)',
+                default: 'New Conversation'
+              },
+              prompt: {
+                type: 'string',
+                description: 'Initial system prompt for this conversation (optional)'
+              }
+            },
+            additionalProperties: false
+          }
         }
       ]
 
@@ -465,6 +484,62 @@ export default class AssistantManagerServer {
                   text: `Successfully sent message: ${JSON.stringify(message, null, 2)}`
                 }
               ]
+            }
+          }
+
+          case 'create_new_conversation': {
+            try {
+              // Get the default assistant first
+              const assistants = await assistantApiService.getAllAssistants()
+              const defaultAssistant = assistants.find(a => a.id === 'default') || assistants[0]
+              
+              if (!defaultAssistant) {
+                return {
+                  content: [
+                    {
+                      type: 'text',
+                      text: 'No assistants available to create a conversation with'
+                    }
+                  ],
+                  isError: true
+                }
+              }
+
+              const { name = 'New Conversation', prompt } = args as { name?: string; prompt?: string }
+              
+              // Create a new topic using the same logic as the frontend
+              const topicData = {
+                name,
+                ...(prompt && { prompt })
+              }
+              
+              const topic = await topicApiService.createTopic(defaultAssistant.id, topicData)
+              
+              return {
+                content: [
+                  {
+                    type: 'text',
+                    text: `Successfully created new conversation: ${JSON.stringify({
+                      topic_id: topic.id,
+                      assistant_id: defaultAssistant.id,
+                      assistant_name: defaultAssistant.name,
+                      topic_name: topic.name,
+                      created_at: topic.createdAt
+                    }, null, 2)}`
+                  }
+                ]
+              }
+            } catch (error) {
+              logger.error(`[AssistantManager] Error creating new conversation:`, error as Error)
+              return {
+                content: [
+                  {
+                    type: 'text',
+                    text: `Failed to create new conversation: ${(error as Error).message}`
+                  }
+                ],
+                isError: true
+              }
             }
           }
 

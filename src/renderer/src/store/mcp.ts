@@ -144,6 +144,15 @@ export const builtinMCPServers: BuiltinMCPServer[] = [
     type: 'inMemory',
     isActive: false,
     provider: 'CherryAI'
+  },
+  {
+    id: nanoid(),
+    name: BuiltinMCPServerNames.assistantManager,
+    type: 'inMemory',
+    isActive: true, // Active by default as it's core functionality
+    provider: 'CherryAI',
+    description: 'Assistant and topic management for Cherry Studio',
+    reference: 'Built-in assistant manager for creating and managing assistants and conversations'
   }
 ] as const
 

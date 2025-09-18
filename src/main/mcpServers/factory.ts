@@ -2,6 +2,7 @@ import { loggerService } from '@logger'
 import { Server } from '@modelcontextprotocol/sdk/server/index.js'
 import { BuiltinMCPServerName, BuiltinMCPServerNames } from '@types'
 
+import AssistantManagerServer from './assistant-manager'
 import BraveSearchServer from './brave-search'
 import DifyKnowledgeServer from './dify-knowledge'
 import FetchServer from './fetch'
@@ -41,6 +42,9 @@ export function createInMemoryMCPServer(
     }
     case BuiltinMCPServerNames.python: {
       return new PythonServer().server
+    }
+    case BuiltinMCPServerNames.assistantManager: {
+      return new AssistantManagerServer().server
     }
     default:
       throw new Error(`Unknown in-memory MCP server: ${name}`)

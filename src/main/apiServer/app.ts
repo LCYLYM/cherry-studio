@@ -6,9 +6,12 @@ import { v4 as uuidv4 } from 'uuid'
 import { authMiddleware } from './middleware/auth'
 import { errorHandler } from './middleware/error'
 import { setupOpenAPIDocumentation } from './middleware/openapi'
+import { assistantsRoutes } from './routes/assistants'
 import { chatRoutes } from './routes/chat'
 import { mcpRoutes } from './routes/mcp'
+import { mcpSSERoutes } from './routes/mcp-sse'
 import { modelsRoutes } from './routes/models'
+import { topicsRoutes } from './routes/topics'
 
 const logger = loggerService.withContext('ApiServer')
 
@@ -104,7 +107,11 @@ app.get('/', (_req, res) => {
       health: 'GET /health',
       models: 'GET /v1/models',
       chat: 'POST /v1/chat/completions',
-      mcp: 'GET /v1/mcps'
+      mcp: 'GET /v1/mcps',
+      assistants: 'GET /v1/assistants',
+      topics: 'GET /v1/topics',
+      createTopic: 'POST /v1/topics',
+      mcpSSE: 'ALL /mmcp'
     }
   })
 })
@@ -114,10 +121,15 @@ const apiRouter = express.Router()
 apiRouter.use(authMiddleware)
 apiRouter.use(express.json())
 // Mount routes
+apiRouter.use('/assistants', assistantsRoutes)
+apiRouter.use('/topics', topicsRoutes)
 apiRouter.use('/chat', chatRoutes)
 apiRouter.use('/mcps', mcpRoutes)
 apiRouter.use('/models', modelsRoutes)
 app.use('/v1', apiRouter)
+
+// MCP SSE endpoint (no auth required for easier AI agent access)
+app.use('/mmcp', mcpSSERoutes)
 
 // Setup OpenAPI documentation
 setupOpenAPIDocumentation(app)

@@ -6,9 +6,11 @@ import { v4 as uuidv4 } from 'uuid'
 import { authMiddleware } from './middleware/auth'
 import { errorHandler } from './middleware/error'
 import { setupOpenAPIDocumentation } from './middleware/openapi'
+import { assistantRoutes } from './routes/assistants'
 import { chatRoutes } from './routes/chat'
 import { mcpRoutes } from './routes/mcp'
 import { modelsRoutes } from './routes/models'
+import { topicRoutes } from './routes/topics'
 
 const logger = loggerService.withContext('ApiServer')
 
@@ -104,7 +106,10 @@ app.get('/', (_req, res) => {
       health: 'GET /health',
       models: 'GET /v1/models',
       chat: 'POST /v1/chat/completions',
-      mcp: 'GET /v1/mcps'
+      mcp: 'GET /v1/mcps',
+      mcp_sse: 'GET /v1/mcps/{server_id}/sse',
+      assistants: 'GET /v1/assistants',
+      topics: 'GET /v1/topics'
     }
   })
 })
@@ -114,9 +119,11 @@ const apiRouter = express.Router()
 apiRouter.use(authMiddleware)
 apiRouter.use(express.json())
 // Mount routes
+apiRouter.use('/assistants', assistantRoutes)
 apiRouter.use('/chat', chatRoutes)
 apiRouter.use('/mcps', mcpRoutes)
 apiRouter.use('/models', modelsRoutes)
+apiRouter.use('/topics', topicRoutes)
 app.use('/v1', apiRouter)
 
 // Setup OpenAPI documentation

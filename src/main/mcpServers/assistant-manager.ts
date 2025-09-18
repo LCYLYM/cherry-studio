@@ -5,8 +5,8 @@ import {
   ListToolsRequestSchema,
   Tool
 } from '@modelcontextprotocol/sdk/types.js'
-import { assistantApiService } from '../../apiServer/services/assistant'
-import { topicApiService } from '../../apiServer/services/topic'
+import { assistantApiService } from '../apiServer/services/assistant'
+import { topicApiService } from '../apiServer/services/topic'
 
 const logger = loggerService.withContext('AssistantManagerMCP')
 

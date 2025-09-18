@@ -7,6 +7,8 @@ import {
 } from '@modelcontextprotocol/sdk/types.js'
 import { assistantApiService } from '../apiServer/services/assistant'
 import { topicApiService } from '../apiServer/services/topic'
+import { reduxService } from '../services/ReduxService'
+import type { Assistant } from '../../renderer/src/types'
 
 const logger = loggerService.withContext('AssistantManagerMCP')
 
@@ -34,7 +36,7 @@ export default class AssistantManagerServer {
       const tools: Tool[] = [
         {
           name: 'list_assistants',
-          description: 'List all assistants (without full conversation content)',
+          description: 'Retrieve a list of available assistants with essential information (id, name, emoji, description, tags). Use this to discover which assistants are available for creating conversations.',
           inputSchema: {
             type: 'object',
             properties: {},
@@ -43,13 +45,13 @@ export default class AssistantManagerServer {
         },
         {
           name: 'get_assistant',
-          description: 'Get detailed information about a specific assistant',
+          description: 'Get complete information about a specific assistant including topics and settings. Use this when you need detailed assistant configuration.',
           inputSchema: {
             type: 'object',
             properties: {
               assistant_id: {
                 type: 'string',
-                description: 'The ID of the assistant to retrieve'
+                description: 'The unique ID of the assistant to retrieve (obtained from list_assistants)'
               }
             },
             required: ['assistant_id'],
@@ -58,30 +60,30 @@ export default class AssistantManagerServer {
         },
         {
           name: 'create_assistant',
-          description: 'Create a new assistant',
+          description: 'Create a new AI assistant with custom configuration. This creates a persistent assistant that can be used for multiple conversations.',
           inputSchema: {
             type: 'object',
             properties: {
               name: {
                 type: 'string',
-                description: 'Assistant name'
+                description: 'Display name for the assistant (required)'
               },
               prompt: {
                 type: 'string',
-                description: 'Assistant system prompt'
+                description: 'System prompt defining the assistant\'s behavior and personality'
               },
               emoji: {
                 type: 'string',
-                description: 'Assistant emoji'
+                description: 'Emoji icon for the assistant (e.g., "🤖", "💡")'
               },
               description: {
                 type: 'string',
-                description: 'Assistant description'
+                description: 'Brief description of the assistant\'s purpose or capabilities'
               },
               tags: {
                 type: 'array',
                 items: { type: 'string' },
-                description: 'Assistant tags'
+                description: 'Tags for categorizing the assistant (e.g., ["coding", "helper"])'
               }
             },
             required: ['name'],
@@ -90,13 +92,13 @@ export default class AssistantManagerServer {
         },
         {
           name: 'update_assistant',
-          description: 'Update an existing assistant',
+          description: 'Modify the configuration of an existing assistant. Use this to change assistant properties like name, prompt, or tags.',
           inputSchema: {
             type: 'object',
             properties: {
               assistant_id: {
                 type: 'string',
-                description: 'The ID of the assistant to update'
+                description: 'The unique ID of the assistant to update'
               },
               name: {
                 type: 'string',
@@ -126,13 +128,13 @@ export default class AssistantManagerServer {
         },
         {
           name: 'delete_assistant',
-          description: 'Delete an assistant and all its topics',
+          description: 'Permanently delete an assistant and all its conversation topics. Warning: This action cannot be undone.',
           inputSchema: {
             type: 'object',
             properties: {
               assistant_id: {
                 type: 'string',
-                description: 'The ID of the assistant to delete'
+                description: 'The unique ID of the assistant to delete'
               }
             },
             required: ['assistant_id'],
@@ -141,13 +143,13 @@ export default class AssistantManagerServer {
         },
         {
           name: 'list_topics',
-          description: 'List all topics (optionally filtered by assistant)',
+          description: 'Get a list of conversation topics. Use assistant_id parameter to filter topics for a specific assistant, or omit to get all topics.',
           inputSchema: {
             type: 'object',
             properties: {
               assistant_id: {
                 type: 'string',
-                description: 'Filter topics by assistant ID (optional)'
+                description: 'Filter topics by assistant ID (optional). If not provided, returns all topics.'
               }
             },
             additionalProperties: false
@@ -155,13 +157,13 @@ export default class AssistantManagerServer {
         },
         {
           name: 'get_topic',
-          description: 'Get detailed information about a specific topic',
+          description: 'Retrieve detailed information about a specific conversation topic including its metadata and current state.',
           inputSchema: {
             type: 'object',
             properties: {
               topic_id: {
                 type: 'string',
-                description: 'The ID of the topic to retrieve'
+                description: 'The unique ID of the topic to retrieve'
               }
             },
             required: ['topic_id'],
@@ -170,21 +172,21 @@ export default class AssistantManagerServer {
         },
         {
           name: 'create_topic',
-          description: 'Create a new topic for an assistant',
+          description: 'Create a new conversation topic for a specific assistant. This starts a new conversation thread.',
           inputSchema: {
             type: 'object',
             properties: {
               assistant_id: {
                 type: 'string',
-                description: 'The ID of the assistant'
+                description: 'The unique ID of the assistant that will handle this conversation'
               },
               name: {
                 type: 'string',
-                description: 'Topic name'
+                description: 'Display name for the conversation topic (optional, defaults to "New Conversation")'
               },
               prompt: {
                 type: 'string',
-                description: 'Topic-specific prompt'
+                description: 'Custom system prompt for this specific conversation (optional)'
               }
             },
             required: ['assistant_id'],
@@ -193,25 +195,25 @@ export default class AssistantManagerServer {
         },
         {
           name: 'update_topic',
-          description: 'Update an existing topic',
+          description: 'Modify the properties of an existing conversation topic such as name or pinned status.',
           inputSchema: {
             type: 'object',
             properties: {
               topic_id: {
                 type: 'string',
-                description: 'The ID of the topic to update'
+                description: 'The unique ID of the topic to update'
               },
               name: {
                 type: 'string',
-                description: 'Topic name'
+                description: 'New display name for the topic'
               },
               prompt: {
                 type: 'string',
-                description: 'Topic-specific prompt'
+                description: 'New topic-specific system prompt'
               },
               pinned: {
                 type: 'boolean',
-                description: 'Whether the topic is pinned'
+                description: 'Whether to pin this topic to the top of the list'
               }
             },
             required: ['topic_id'],
@@ -220,13 +222,13 @@ export default class AssistantManagerServer {
         },
         {
           name: 'delete_topic',
-          description: 'Delete a topic and all its messages',
+          description: 'Permanently delete a conversation topic and all its messages. Warning: This action cannot be undone.',
           inputSchema: {
             type: 'object',
             properties: {
               topic_id: {
                 type: 'string',
-                description: 'The ID of the topic to delete'
+                description: 'The unique ID of the topic to delete'
               }
             },
             required: ['topic_id'],
@@ -235,13 +237,13 @@ export default class AssistantManagerServer {
         },
         {
           name: 'get_topic_messages',
-          description: 'Get all messages for a specific topic',
+          description: 'Retrieve all messages in a conversation topic. Use this to see the conversation history.',
           inputSchema: {
             type: 'object',
             properties: {
               topic_id: {
                 type: 'string',
-                description: 'The ID of the topic'
+                description: 'The unique ID of the topic whose messages to retrieve'
               }
             },
             required: ['topic_id'],
@@ -250,27 +252,27 @@ export default class AssistantManagerServer {
         },
         {
           name: 'send_message',
-          description: 'Add a new message to a topic',
+          description: 'Add a new message to an existing conversation topic. This appends the message to the conversation history.',
           inputSchema: {
             type: 'object',
             properties: {
               topic_id: {
                 type: 'string',
-                description: 'The ID of the topic'
+                description: 'The unique ID of the topic to send the message to'
               },
               content: {
                 type: 'string',
-                description: 'Message content'
+                description: 'The text content of the message'
               },
               role: {
                 type: 'string',
                 enum: ['user', 'assistant'],
-                description: 'Message role'
+                description: 'Role of the message sender: "user" for human messages, "assistant" for AI responses'
               },
               type: {
                 type: 'string',
                 enum: ['text', '@', 'clear'],
-                description: 'Message type',
+                description: 'Type of message: "text" for normal messages, "@" for mentions, "clear" for context clearing',
                 default: 'text'
               }
             },
@@ -280,18 +282,17 @@ export default class AssistantManagerServer {
         },
         {
           name: 'create_new_conversation',
-          description: 'Create a new conversation topic with the default assistant (equivalent to clicking "New Topic" in the UI)',
+          description: 'Quickly create a new conversation with the default assistant. This is the equivalent of clicking "New Topic" in the UI and is the simplest way to start a conversation.',
           inputSchema: {
             type: 'object',
             properties: {
               name: {
                 type: 'string',
-                description: 'Custom name for the conversation (optional)',
-                default: 'New Conversation'
+                description: 'Custom name for the conversation (optional, defaults to "New Conversation")'
               },
               prompt: {
                 type: 'string',
-                description: 'Initial system prompt for this conversation (optional)'
+                description: 'Initial system prompt for this conversation (optional, uses assistant default if not provided)'
               }
             },
             additionalProperties: false
@@ -489,8 +490,8 @@ export default class AssistantManagerServer {
 
           case 'create_new_conversation': {
             try {
-              // Get the default assistant first
-              const assistants = await assistantApiService.getAllAssistants()
+              // Get full assistants list for finding default or first assistant
+              const assistants = await reduxService.select<Assistant[]>('state.assistants.assistants')
               const defaultAssistant = assistants.find(a => a.id === 'default') || assistants[0]
               
               if (!defaultAssistant) {

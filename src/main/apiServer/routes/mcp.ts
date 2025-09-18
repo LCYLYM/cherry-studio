@@ -155,7 +155,7 @@ router.all('/:server_id/mcp', async (req: Request, res: Response) => {
  * /v1/mcps/{server_id}/sse:
  *   get:
  *     summary: Connect to MCP server via SSE
- *     description: Establish a Server-Sent Events connection to an MCP server
+ *     description: Establish a Server-Sent Events connection to an MCP server for real-time communication
  *     tags: [MCP]
  *     parameters:
  *       - in: path
@@ -198,19 +198,40 @@ router.get('/:server_id/sse', async (req: Request, res: Response) => {
     'Cache-Control': 'no-cache',
     'Connection': 'keep-alive',
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Cache-Control'
+    'Access-Control-Allow-Headers': 'Cache-Control, Content-Type, Authorization'
   })
 
-  // Send initial connection event
-  res.write(`data: ${JSON.stringify({ 
-    type: 'connection', 
-    server: { 
-      id: server.id, 
-      name: server.name,
-      type: server.type
-    },
-    timestamp: new Date().toISOString()
-  })}\n\n`)
+  try {
+    // Get server capabilities and tools for initial connection
+    const serverInfo = await mcpApiService.getServerInfo(server.id)
+    
+    // Send initial connection event with server capabilities
+    res.write(`data: ${JSON.stringify({ 
+      type: 'connection', 
+      server: { 
+        id: server.id, 
+        name: server.name,
+        type: server.type,
+        description: server.description || 'MCP Server'
+      },
+      tools: serverInfo?.tools || [],
+      timestamp: new Date().toISOString()
+    })}\n\n`)
+
+    logger.info(`SSE connection established for server: ${server.name} (${server.id})`)
+  } catch (error) {
+    logger.error(`Failed to get server info for SSE connection: ${error}`)
+    res.write(`data: ${JSON.stringify({ 
+      type: 'connection', 
+      server: { 
+        id: server.id, 
+        name: server.name,
+        type: server.type
+      },
+      error: 'Failed to load server capabilities',
+      timestamp: new Date().toISOString()
+    })}\n\n`)
+  }
 
   // Handle client disconnect
   req.on('close', () => {
@@ -230,6 +251,188 @@ router.get('/:server_id/sse', async (req: Request, res: Response) => {
   req.on('close', () => {
     clearInterval(heartbeat)
   })
+})
+
+/**
+ * @swagger
+ * /v1/mcp:
+ *   get:
+ *     summary: Connect to Assistant Manager MCP via SSE
+ *     description: Establish a Server-Sent Events connection to the built-in Assistant Manager MCP server for AI to manage assistants and topics
+ *     tags: [MCP]
+ *     responses:
+ *       200:
+ *         description: SSE connection established to Assistant Manager
+ *         content:
+ *           text/event-stream:
+ *             schema:
+ *               type: string
+ *       503:
+ *         description: Assistant Manager MCP server not available
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
+router.get('/assistant-manager/sse', async (req: Request, res: Response) => {
+  try {
+    // Find the assistant-manager server
+    const servers = await mcpApiService.getAllServers(req)
+    const assistantManagerServer = Object.values(servers.servers).find(
+      server => server.name === '@cherry/assistant-manager'
+    )
+
+    if (!assistantManagerServer) {
+      logger.warn('Assistant Manager MCP server not found or not active')
+      return res.status(503).json({
+        success: false,
+        error: {
+          message: 'Assistant Manager MCP server not available',
+          type: 'service_unavailable',
+          code: 'assistant_manager_unavailable'
+        }
+      })
+    }
+
+    // Set up SSE headers
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Headers': 'Cache-Control, Content-Type, Authorization'
+    })
+
+    try {
+      // Get assistant-manager server info and capabilities
+      const serverInfo = await mcpApiService.getServerInfo(assistantManagerServer.id)
+      
+      // Send initial connection event with assistant management capabilities
+      res.write(`data: ${JSON.stringify({ 
+        type: 'connection',
+        server: {
+          id: assistantManagerServer.id,
+          name: assistantManagerServer.name,
+          type: assistantManagerServer.type,
+          description: 'Assistant and topic management for Cherry Studio'
+        },
+        capabilities: {
+          assistant_management: true,
+          topic_management: true,
+          message_management: true
+        },
+        tools: serverInfo?.tools || [],
+        timestamp: new Date().toISOString()
+      })}\n\n`)
+
+      logger.info(`Assistant Manager SSE connection established`)
+    } catch (error) {
+      logger.error(`Failed to get assistant-manager server info: ${error}`)
+      res.write(`data: ${JSON.stringify({ 
+        type: 'connection',
+        server: {
+          id: assistantManagerServer.id,
+          name: assistantManagerServer.name,
+          type: assistantManagerServer.type,
+          description: 'Assistant and topic management for Cherry Studio'
+        },
+        error: 'Failed to load server capabilities',
+        timestamp: new Date().toISOString()
+      })}\n\n`)
+    }
+
+    // Keep connection alive with periodic heartbeat
+    const heartbeat = setInterval(() => {
+      res.write(`data: ${JSON.stringify({ 
+        type: 'heartbeat', 
+        timestamp: new Date().toISOString()
+      })}\n\n`)
+    }, 30000) // Every 30 seconds
+
+    // Handle client disconnect
+    const cleanup = () => {
+      clearInterval(heartbeat)
+      logger.info('Assistant Manager SSE client disconnected')
+    }
+
+    req.on('close', cleanup)
+    req.on('end', cleanup)
+
+  } catch (error: any) {
+    logger.error('Error setting up Assistant Manager SSE connection:', error)
+    return res.status(503).json({
+      success: false,
+      error: {
+        message: `Failed to establish Assistant Manager connection: ${error.message}`,
+        type: 'service_unavailable',
+        code: 'connection_failed'
+      }
+    })
+  }
+})
+
+/**
+ * @swagger
+ * /v1/mcp/assistant-manager:
+ *   all:
+ *     summary: Connect to Assistant Manager MCP
+ *     description: Direct communication with the built-in Assistant Manager MCP server
+ *     tags: [MCP]
+ *     responses:
+ *       200:
+ *         description: MCP communication successful
+ *       503:
+ *         description: Assistant Manager MCP server not available
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
+router.all('/assistant-manager', async (req: Request, res: Response) => {
+  try {
+    // Find the assistant-manager server
+    const servers = await mcpApiService.getAllServers(req)
+    const assistantManagerServer = Object.values(servers.servers).find(
+      server => server.name === '@cherry/assistant-manager'
+    )
+
+    if (!assistantManagerServer) {
+      logger.warn('Assistant Manager MCP server not found for direct communication')
+      return res.status(503).json({
+        success: false,
+        error: {
+          message: 'Assistant Manager MCP server not available',
+          type: 'service_unavailable',
+          code: 'assistant_manager_unavailable'
+        }
+      })
+    }
+
+    // Get the server by ID and forward the request
+    const server = await mcpApiService.getServerById(assistantManagerServer.id)
+    if (!server) {
+      return res.status(404).json({
+        success: false,
+        error: {
+          message: 'Assistant Manager MCP server not found',
+          type: 'not_found',
+          code: 'server_not_found'
+        }
+      })
+    }
+
+    return await mcpApiService.handleRequest(req, res, server)
+  } catch (error: any) {
+    logger.error('Error handling Assistant Manager MCP request:', error)
+    return res.status(503).json({
+      success: false,
+      error: {
+        message: `Failed to communicate with Assistant Manager: ${error.message}`,
+        type: 'service_unavailable',
+        code: 'communication_failed'
+      }
+    })
+  }
 })
 
 export { router as mcpRoutes }

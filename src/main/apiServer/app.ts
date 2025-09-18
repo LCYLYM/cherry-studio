@@ -108,6 +108,8 @@ app.get('/', (_req, res) => {
       chat: 'POST /v1/chat/completions',
       mcp: 'GET /v1/mcps',
       mcp_sse: 'GET /v1/mcps/{server_id}/sse',
+      assistant_manager_mcp: 'ALL /v1/mcps/assistant-manager',
+      assistant_manager_sse: 'GET /v1/mcps/assistant-manager/sse',
       assistants: 'GET /v1/assistants',
       topics: 'GET /v1/topics'
     }

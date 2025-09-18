@@ -58,7 +58,7 @@ class MCPApiService extends EventEmitter {
   }
 
   /**
-   * Get servers directly from Redux store
+   * Get servers directly from Redux store, ensuring builtin servers are available
    */
   private async getServersFromRedux(): Promise<MCPServer[]> {
     try {
@@ -68,17 +68,41 @@ class MCPApiService extends EventEmitter {
       const cachedServers = reduxService.selectSync<MCPServer[]>('state.mcp.servers')
       if (cachedServers && Array.isArray(cachedServers)) {
         logger.silly(`Found ${cachedServers.length} servers in Redux cache`)
-        return cachedServers
+        return this.ensureBuiltinServers(cachedServers)
       }
 
       // If cache is not available, get fresh data
       const servers = await reduxService.select<MCPServer[]>('state.mcp.servers')
       logger.silly(`Fetched ${servers?.length || 0} servers from Redux store`)
-      return servers || []
+      return this.ensureBuiltinServers(servers || [])
     } catch (error: any) {
       logger.error('Failed to get servers from Redux:', error)
-      return []
+      return this.ensureBuiltinServers([])
     }
+  }
+
+  /**
+   * Ensure essential builtin servers (like assistant-manager) are always available
+   */
+  private ensureBuiltinServers(servers: MCPServer[]): MCPServer[] {
+    const hasAssistantManager = servers.some(
+      server => server.name === '@cherry/assistant-manager'
+    )
+
+    if (!hasAssistantManager) {
+      logger.info('Adding missing assistant-manager MCP server')
+      const assistantManagerServer: MCPServer = {
+        id: 'builtin-assistant-manager',
+        name: '@cherry/assistant-manager',
+        type: 'inMemory',
+        isActive: true,
+        provider: 'CherryAI',
+        description: 'Assistant and topic management for Cherry Studio'
+      }
+      return [...servers, assistantManagerServer]
+    }
+
+    return servers
   }
 
   // get all activated servers

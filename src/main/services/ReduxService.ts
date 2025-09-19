@@ -64,6 +64,12 @@ export class ReduxService extends EventEmitter {
   // 添加同步选择器方法
   selectSync<T = StoreValue>(selector: string): T | undefined {
     try {
+      // Check if stateCache is properly initialized
+      if (!this.stateCache || typeof this.stateCache !== 'object') {
+        logger.debug('State cache is not properly initialized')
+        return undefined
+      }
+
       // 使用 Function 构造器来安全地执行选择器
       const selectorFn = new Function('state', `return ${selector}`)
       return selectorFn(this.stateCache)
@@ -91,12 +97,20 @@ export class ReduxService extends EventEmitter {
         throw new Error('Main window is not available')
       }
       await this.waitForStoreReady(mainWindow.webContents)
-      return await mainWindow.webContents.executeJavaScript(`
+      
+      const result = await mainWindow.webContents.executeJavaScript(`
         (() => {
           const state = window.store.getState();
           return ${selector};
         })()
       `)
+      
+      // Handle case where the result is undefined or null
+      if (result === undefined || result === null) {
+        logger.debug(`Selector '${selector}' returned undefined/null from renderer`)
+      }
+      
+      return result
     } catch (error) {
       logger.error('Failed to select store value:', error as Error)
       throw error

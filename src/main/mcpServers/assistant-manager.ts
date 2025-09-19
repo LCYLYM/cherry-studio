@@ -492,6 +492,20 @@ export default class AssistantManagerServer {
             try {
               // Get full assistants list for finding default or first assistant
               const assistants = await reduxService.select<Assistant[]>('state.assistants.assistants')
+              
+              // Handle case where assistants is undefined or not an array
+              if (!assistants || !Array.isArray(assistants)) {
+                return {
+                  content: [
+                    {
+                      type: 'text',
+                      text: 'Assistants state is not properly initialized. Please ensure the application is fully loaded.'
+                    }
+                  ],
+                  isError: true
+                }
+              }
+              
               const defaultAssistant = assistants.find(a => a.id === 'default') || assistants[0]
               
               if (!defaultAssistant) {

@@ -120,9 +120,20 @@ export class TopicApiService {
       // Add topic to database (for messages persistence)
       const mainWindow = require('../../services/WindowService').windowService.getMainWindow()
       if (mainWindow) {
-        await mainWindow.webContents.executeJavaScript(`
-          window.db.topics.add({ id: '${newTopic.id}', messages: [] })
-        `)
+        try {
+          const addScript = `
+            (function(topicId) {
+              if (window.db && window.db.topics) {
+                return window.db.topics.add({ id: topicId, messages: [] });
+              }
+              return Promise.resolve();
+            })('${newTopic.id}')
+          `
+          await mainWindow.webContents.executeJavaScript(addScript)
+        } catch (dbError) {
+          logger.warn(`Failed to add topic to database: ${newTopic.id}:`, dbError as Error)
+          // Continue execution even if database update fails
+        }
       }
 
       logger.info(`Created new topic: ${newTopic.id} for assistant: ${assistantId}`)
@@ -234,9 +245,21 @@ export class TopicApiService {
       // Update topic in database
       const mainWindow = require('../../services/WindowService').windowService.getMainWindow()
       if (mainWindow) {
-        await mainWindow.webContents.executeJavaScript(`
-          window.db.topics.update('${topicId}', { messages: ${JSON.stringify(updatedTopic.messages)} })
-        `)
+        try {
+          // Safer approach: pass data through a function parameter
+          const updateScript = `
+            (function(topicId, messages) {
+              if (window.db && window.db.topics) {
+                return window.db.topics.update(topicId, { messages: messages });
+              }
+              return Promise.resolve();
+            })('${topicId}', ${JSON.stringify(updatedTopic.messages)})
+          `
+          await mainWindow.webContents.executeJavaScript(updateScript)
+        } catch (dbError) {
+          logger.warn(`Failed to update database for topic ${topicId}:`, dbError as Error)
+          // Continue execution even if database update fails
+        }
       }
 
       logger.info(`Added message to topic: ${topicId}`)

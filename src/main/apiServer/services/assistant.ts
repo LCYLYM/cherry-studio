@@ -19,17 +19,21 @@ const logger = loggerService.withContext('AssistantApiService')
  */
 export class AssistantApiService {
   /**
-   * Get all assistants (without full conversation content)
+   * Get all assistants (essential fields only for AI decision making)
    */
-  async getAllAssistants(): Promise<Omit<Assistant, 'topics'>[]> {
+  async getAllAssistants(): Promise<Pick<Assistant, 'id' | 'name' | 'emoji' | 'description' | 'tags' | 'type'>[]> {
     try {
       const assistants = await reduxService.select<Assistant[]>('state.assistants.assistants')
       
-      // Remove topics to reduce payload size (per requirement)
-      return assistants.map(assistant => {
-        const { topics, ...assistantWithoutTopics } = assistant
-        return assistantWithoutTopics
-      })
+      // Return only essential fields to reduce payload size and improve AI decision making
+      return assistants.map(assistant => ({
+        id: assistant.id,
+        name: assistant.name,
+        emoji: assistant.emoji,
+        description: assistant.description,
+        tags: assistant.tags,
+        type: assistant.type
+      }))
     } catch (error) {
       logger.error('Failed to get all assistants:', error as Error)
       throw new Error('Failed to retrieve assistants')

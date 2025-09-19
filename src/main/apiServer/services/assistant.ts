@@ -25,6 +25,12 @@ export class AssistantApiService {
     try {
       const assistants = await reduxService.select<Assistant[]>('state.assistants.assistants')
       
+      // Handle case where assistants is undefined or not an array
+      if (!assistants || !Array.isArray(assistants)) {
+        logger.warn('Assistants state is not properly initialized, returning empty array')
+        return []
+      }
+      
       // Return only essential fields to reduce payload size and improve AI decision making
       return assistants.map(assistant => ({
         id: assistant.id,
@@ -46,6 +52,13 @@ export class AssistantApiService {
   async getAssistantById(id: string): Promise<Assistant | null> {
     try {
       const assistants = await reduxService.select<Assistant[]>('state.assistants.assistants')
+      
+      // Handle case where assistants is undefined or not an array
+      if (!assistants || !Array.isArray(assistants)) {
+        logger.warn('Assistants state is not properly initialized, returning null')
+        return null
+      }
+      
       const assistant = assistants.find(a => a.id === id)
       return assistant || null
     } catch (error) {

@@ -43,8 +43,15 @@ async function getMcpServerConfigById(id: string): Promise<MCPServer | undefined
 async function getServersFromRedux(): Promise<MCPServer[]> {
   try {
     const servers = await reduxService.select<MCPServer[]>('state.mcp.servers')
-    logger.silly(`Fetched ${servers?.length || 0} servers from Redux store`)
-    return servers || []
+    
+    // Handle case where servers is undefined or not an array
+    if (!servers || !Array.isArray(servers)) {
+      logger.warn('MCP servers state is not properly initialized, returning empty array')
+      return []
+    }
+    
+    logger.silly(`Fetched ${servers.length} servers from Redux store`)
+    return servers
   } catch (error: any) {
     logger.error('Failed to get servers from Redux:', error)
     return []

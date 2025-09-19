@@ -27,6 +27,12 @@ export class TopicApiService {
     try {
       const assistants = await reduxService.select<Assistant[]>('state.assistants.assistants')
       
+      // Handle case where assistants is undefined or not an array
+      if (!assistants || !Array.isArray(assistants)) {
+        logger.warn('Assistants state is not properly initialized, returning empty array')
+        return []
+      }
+      
       let allTopics: Topic[] = []
       
       if (assistantId) {
@@ -34,10 +40,10 @@ export class TopicApiService {
         if (!assistant) {
           throw new Error(`Assistant ${assistantId} not found`)
         }
-        allTopics = assistant.topics
+        allTopics = assistant.topics || []
       } else {
         // Collect topics from all assistants
-        allTopics = assistants.flatMap(assistant => assistant.topics)
+        allTopics = assistants.flatMap(assistant => assistant.topics || [])
       }
 
       // Remove messages to reduce payload size
@@ -58,8 +64,15 @@ export class TopicApiService {
     try {
       const assistants = await reduxService.select<Assistant[]>('state.assistants.assistants')
       
+      // Handle case where assistants is undefined or not an array
+      if (!assistants || !Array.isArray(assistants)) {
+        logger.warn('Assistants state is not properly initialized, returning null')
+        return null
+      }
+      
       for (const assistant of assistants) {
-        const topic = assistant.topics.find(t => t.id === id)
+        const topics = assistant.topics || []
+        const topic = topics.find(t => t.id === id)
         if (topic) {
           return topic
         }
